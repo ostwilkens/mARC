@@ -1,0 +1,4 @@
+.env
+session.txt
+www/*
+store
