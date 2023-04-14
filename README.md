@@ -9,11 +9,15 @@ A [matrix](https://matrix.org/) client daemon utilizing static site generation. 
 - Serve generated files with a http server of choice: `cd www && npx serve`
 
 ## Planned features
-- Combined room+people list
-- One statically generated html file per room
+- ~~Combined room+people list~~
+- ~~One statically generated html file per room~~
 - Usable search
 - IRC-convention "edit history" (*fix)
 - Flag but never delete messages
+- Require browser cert when accessing the site and sending messages
+- Blocking http request waiting for room.html updates
+- Message sending
+- Script injection protection
 
 ## Undecided on
 - Reactions
@@ -24,3 +28,6 @@ A [matrix](https://matrix.org/) client daemon utilizing static site generation. 
 - Threads
 - Video or VoIP
 - Historical revisionism (message deletion)
+
+## Current state
+![Screenshot](scrot.png)
