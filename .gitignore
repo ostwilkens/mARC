@@ -2,8 +2,5 @@
 session.txt
 www/*
 store
-!www/index.html
-!www/*.css
-!www/rooms
-www/rooms/*
-!www/*.template.html
+/samples
+*.sqlite

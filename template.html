@@ -1,0 +1,128 @@
+<html>
+    <head>
+        <title>mARC - {{room_display_name}}</title>
+        <style>
+            html {
+                font-family: monospace;
+            }
+
+            body {
+                margin: 0;
+                display: flex;
+            }
+
+            #rooms {
+                height: 100%;
+            }
+
+            #room {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                border-left: 1px solid black;
+            }
+
+            #messages {
+                flex: 1;
+                justify-content: flex-end;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .message {
+            }
+
+            #input {
+                border: none;
+                border-top: 1px solid black;
+                outline: none;
+            }
+        </style>
+        <script>
+            function sendMessage(message) {
+                const room_id = "{{room_id}}"
+                const access_token = "{{access_token}}"
+
+                const url = `https://matrix.znurre.com/_matrix/client/r0/rooms/${room_id}/send/m.room.message?access_token=${access_token}`
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        msgtype: "m.text",
+                        body: message
+                    })
+                })
+                .then(response => response.json())
+                .then(data => console.log(data))
+                .catch(error => console.error(error))
+            }
+
+            function inputKeydown(event) {
+                if (event.key === "Enter") {
+                    sendMessage(event.target.value)
+                    event.target.value = ""
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <div id="rooms">
+            {{#rooms}}
+            <a href='/{{filename}}'>{{display_name}}</a><br>
+            {{/rooms}}
+        </div>
+        <div id="room">
+            <div id="messages">
+                {{#messages}}
+                <span class="message">[{{hhmm}}] &lt;{{sender_display_name}}&gt; {{body}}</span>
+                {{/messages}}
+            </div>
+            <input id="input" type="text" onkeydown="inputKeydown(event)">
+        </div>
+        <script>
+            const room_id = "{{room_id}}"
+            const build_batch_ts = "{{build_batch_ts}}"
+            const access_token = "{{access_token}}"
+
+            function fetchEvents(since) {
+                const url = `https://matrix.znurre.com/_matrix/client/r0/sync?since=${since}&timeout=30000&access_token=${access_token}`
+                fetch(url)
+                    .then(r => r.json())
+                    .then(data => {
+                        if(data.rooms && data.rooms.join) {
+                            if (room_id in data.rooms.join) {
+                                const room = data.rooms.join[room_id]
+                                for(const event of room.timeline.events) {
+                                    if(event.type == "m.room.message" && event.content.msgtype == "m.text") {
+                                        const body = event.content.body
+                                        const sender = event.sender
+                                        const timestamp = event.origin_server_ts
+                                        console.log(timestamp, sender, body)
+
+                                        const message = document.createElement("span")
+                                        message.classList.add("message")
+
+                                        const sender_display_name = sender.substring(1).split(":")[0];
+
+                                        const date = new Date(timestamp);
+                                        const hours = date.getHours().toString().padStart(2, '0');
+                                        const minutes = date.getMinutes().toString().padStart(2, '0');
+                                        const formattedTime = `${hours}:${minutes}`;
+
+                                        message.innerText = `[${formattedTime}] <${sender_display_name}> ${body}`
+                                        document.getElementById("messages").appendChild(message)
+                                    }
+                                }
+                            }
+                        }
+
+                        fetchEvents(data.next_batch)
+                    })
+            }
+
+            fetchEvents(build_batch_ts)
+        </script>
+    </body>
+</html>

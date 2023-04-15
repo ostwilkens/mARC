@@ -1,3 +1,2 @@
-simplematrixbotlib
 chevron
 python-dotenv
