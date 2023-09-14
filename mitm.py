@@ -11,6 +11,10 @@ load_dotenv(".env")
 MATRIX_SERVER_URL = os.getenv("MATRIX_SERVER_URL")
 MATRIX_ACCESS_TOKEN = os.getenv("MATRIX_ACCESS_TOKEN")
 
+# ensure /www folder exists
+if not os.path.exists("www"):
+    os.mkdir("www")
+
 
 template = open("template.html", "r").read()
 db = sqlite3.connect("db.sqlite")
@@ -19,6 +23,7 @@ cursor.execute("CREATE TABLE IF NOT EXISTS messages (event_id text PRIMARY KEY, 
 cursor.execute("CREATE TABLE IF NOT EXISTS rooms (room_id text PRIMARY KEY, display_name text NULL)")
 cursor.execute("CREATE TABLE IF NOT EXISTS store (key text PRIMARY KEY, value text)")
 cursor.execute("CREATE TABLE IF NOT EXISTS members (room_id text, user_id text, displayname text, PRIMARY KEY (room_id, user_id))")
+cursor.execute("CREATE TABLE IF NOT EXISTS reactions (event_id text, key text, sender text)")
 db.commit()
 
 
@@ -38,14 +43,24 @@ def render(timestamp, only_room_id=None):
         if only_room_id and room["room_id"] != only_room_id:
             continue
 
-        cursor.execute("SELECT sender, sender_display_name, timestamp, body FROM messages WHERE room_id = ? ORDER BY timestamp ASC", (room["room_id"],))
+        cursor.execute("SELECT sender, sender_display_name, timestamp, body, event_id FROM messages WHERE room_id = ? ORDER BY timestamp ASC", (room["room_id"],))
         messages = [{
             "sender": x[0], 
             "sender_display_name": x[1], 
             "timestamp": x[2],
             "body": x[3],
             "hhmm": time.strftime("%H:%M", time.localtime(x[2]/1000)),
+            "event_id": x[4],
         } for x in cursor.fetchall()]
+
+        for message in messages:
+            cursor.execute("SELECT key, sender FROM reactions WHERE event_id = ?", (message["event_id"],))
+            reactions = cursor.fetchall()
+            message["reactions"] = [{
+                "key": x[0],
+                "sender": x[1],
+                "sender_display_name": x[1][1:].split(":")[0],
+            } for x in reactions]
 
         data = {
             "rooms": rooms,
@@ -139,7 +154,7 @@ def fetch_events(since=None):
                     db.commit()
             
             for event in room["timeline"]["events"]:
-                if event["type"] == "m.room.message" and event["content"]["msgtype"] == "m.text":
+                if event["type"] == "m.room.message" and event["content"].get("msgtype") == "m.text":
                     body = event["content"]["body"]
                     sender = event["sender"]
                     sender_display_name = sender[1:].split(":")[0]
@@ -148,6 +163,17 @@ def fetch_events(since=None):
                     # store message in db
                     cursor.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, ?, ?, ?, ?)", (event["event_id"], room_id, sender, sender_display_name, timestamp, body))
                     db.commit()
+                elif event["type"] == "m.reaction":
+                    sender = event["sender"] # @xinux:matrix.znurre.com
+                    content = event["content"] # {"m.relates_to": {"event_id": "$event_id", "key": "👍", "rel_type": "m.annotation"}}
+                    message_id = content["m.relates_to"]["event_id"]
+                    key = content["m.relates_to"]["key"]
+
+                    # store reaction in db
+                    cursor.execute("INSERT OR IGNORE INTO reactions VALUES (?, ?, ?)", (message_id, key, sender))
+                    db.commit()
+                else:
+                    print(f"Unknown event type: {event['type']}")
             
             # render room
             render(next_batch, room_id)
@@ -163,5 +189,12 @@ fetch_rooms(since)
 
 while True:
     since = fetch_events(since)
+    # break
 
 db.close()
+
+# #%%
+# from xmldiff import main as xmldiff
+
+# diff = xmldiff.diff_files("www/a.html", "www/b.html")
+# diff

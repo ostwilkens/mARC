@@ -9,6 +9,10 @@ A [matrix](https://matrix.org/) client daemon utilizing append-only static site 
 - Serve generated files with a http server of choice: `cd www && npx serve`
 
 ## Planned features
+- Reaction emojis
+- ~~Click on nick to quote~~
+- ~~Multiline text (shift+enter)~~
+- HTML patching from server
 - Avoid duplication of logic in python + js
 - ~~Combined room+people list~~
 - ~~One statically generated html file per room~~

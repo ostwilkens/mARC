@@ -1,43 +1,9 @@
+<!DOCTYPE html>
 <html>
     <head>
-        <title>mARC - {{room_display_name}}</title>
-        <style>
-            html {
-                font-family: monospace;
-            }
-
-            body {
-                margin: 0;
-                display: flex;
-            }
-
-            #rooms {
-                height: 100%;
-            }
-
-            #room {
-                flex: 1;
-                display: flex;
-                flex-direction: column;
-                border-left: 1px solid black;
-            }
-
-            #messages {
-                flex: 1;
-                justify-content: flex-end;
-                display: flex;
-                flex-direction: column;
-            }
-
-            .message {
-            }
-
-            #input {
-                border: none;
-                border-top: 1px solid black;
-                outline: none;
-            }
-        </style>
+        <title>{{room_display_name}}</title>
+        <link rel="stylesheet" href="styles.css">
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">        
         <script>
             function sendMessage(message) {
                 const room_id = "{{room_id}}"
@@ -60,69 +26,100 @@
             }
 
             function inputKeydown(event) {
+                const input = document.getElementById("input")
+
+                if (input.value === "") {
+                    return
+                }
+
+                if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+                    return
+                }
+
                 if (event.key === "Enter") {
                     sendMessage(event.target.value)
                     event.target.value = ""
+                    event.preventDefault()
                 }
             }
+
+            function clickNick(nick) {
+                const input = document.getElementById("input")
+                if (input.value === "") {
+                    input.value = nick + ": "
+                    input.focus()
+                }
+            }
+
+            function update() {
+                fetch(window.location.href)
+                    .then(r => r.text())
+                    .then(r => {
+                        // get content of #messages in r
+                        const parser = new DOMParser()
+                        const fetchedDocument = parser.parseFromString(r, "text/html")
+                        const newMessages = fetchedDocument.getElementById("messages").innerHTML
+
+                        const isSame = newMessages == document.getElementById("messages").innerHTML
+
+                        if(!isSame) {
+                            document.getElementById("messages").innerHTML = newMessages
+                            document.getElementById("input").scrollIntoView()
+                            // applyEmoticonFont()
+                            console.log("updated")
+                        }
+                    })
+            }
+
+            setInterval(update, 1000)
+
+            // scroll to bottom
+            if(!window.location.href.includes("#input")) {
+                window.location.href += "#input"
+            }
+
+            // function applyEmoticonFont() {
+            //     // go through messages, find all emoticons [:) :P :D], replace with emoticon font
+            //     const messages = document.getElementsByClassName("message")
+            //     for (const message of messages) {
+            //         const messageBody = message.getElementsByClassName("body")[0]
+            //         const emoticons = messageBody.innerHTML.match(/(:\)|:P|:D)/g)
+            //         if (emoticons) {
+            //             for (const emoticon of emoticons) {
+            //                 messageBody.innerHTML = messageBody.innerHTML.replace(emoticon, `<span class="emoticon">${emoticon}</span>`)
+            //             }
+            //         }
+            //     }
+            // }
         </script>
     </head>
     <body>
+        <div id="top-fadeout"></div>
         <div id="rooms">
             {{#rooms}}
-            <a href='/{{filename}}'>{{display_name}}</a><br>
+            <a href='/{{filename}}#input'>{{display_name}}</a><br/>
             {{/rooms}}
         </div>
         <div id="room">
             <div id="messages">
                 {{#messages}}
-                <span class="message">[{{hhmm}}] &lt;{{sender_display_name}}&gt; {{body}}</span>
+                <span class="message">
+                    <span class="timestamp">{{hhmm}}</span>
+                    <span class="sender" onclick="clickNick('{{sender_display_name}}')">{{sender_display_name}}</span>
+                    <span class="body">{{body}}
+                        <span class="reactions">
+                            {{#reactions}}
+                            <span class="reaction" title="{{sender}}">{{key}}</span>
+                            {{/reactions}}
+                        </span>
+                    </span>
+                </span>
                 {{/messages}}
             </div>
-            <input id="input" type="text" onkeydown="inputKeydown(event)">
+            <textarea id="input" type="text" rows="6" autofocus onkeydown="inputKeydown(event)" placeholder=" ..."></textarea>
         </div>
-        <script>
-            const room_id = "{{room_id}}"
-            const build_batch_ts = "{{build_batch_ts}}"
-            const access_token = "{{access_token}}"
-
-            function fetchEvents(since) {
-                const url = `https://matrix.znurre.com/_matrix/client/r0/sync?since=${since}&timeout=30000&access_token=${access_token}`
-                fetch(url)
-                    .then(r => r.json())
-                    .then(data => {
-                        if(data.rooms && data.rooms.join) {
-                            if (room_id in data.rooms.join) {
-                                const room = data.rooms.join[room_id]
-                                for(const event of room.timeline.events) {
-                                    if(event.type == "m.room.message" && event.content.msgtype == "m.text") {
-                                        const body = event.content.body
-                                        const sender = event.sender
-                                        const timestamp = event.origin_server_ts
-                                        console.log(timestamp, sender, body)
-
-                                        const message = document.createElement("span")
-                                        message.classList.add("message")
-
-                                        const sender_display_name = sender.substring(1).split(":")[0];
-
-                                        const date = new Date(timestamp);
-                                        const hours = date.getHours().toString().padStart(2, '0');
-                                        const minutes = date.getMinutes().toString().padStart(2, '0');
-                                        const formattedTime = `${hours}:${minutes}`;
-
-                                        message.innerText = `[${formattedTime}] <${sender_display_name}> ${body}`
-                                        document.getElementById("messages").appendChild(message)
-                                    }
-                                }
-                            }
-                        }
-
-                        fetchEvents(data.next_batch)
-                    })
-            }
-
-            fetchEvents(build_batch_ts)
-        </script>
+        <!-- <script>
+            applyEmoticonFont()
+        </script> -->
     </body>
 </html>
