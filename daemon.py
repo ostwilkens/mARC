@@ -1,89 +1,28 @@
 #%%
 import os
-import time
+import sqlite3
 import requests
 import json
-import sqlite3
-import chevron
-from dotenv import load_dotenv
 
-load_dotenv(".env")
-MATRIX_SERVER_URL = os.getenv("MATRIX_SERVER_URL")
-MATRIX_ACCESS_TOKEN = os.getenv("MATRIX_ACCESS_TOKEN")
+def fetch_whoami(db, cursor):
+    cursor.execute("SELECT value FROM store WHERE key = 'access_token'")
+    access_token = cursor.fetchone()[0]
+    cursor.execute("SELECT value FROM store WHERE key = 'homeserver'")
+    homeserver = cursor.fetchone()[0]
 
-# ensure /www folder exists
-if not os.path.exists("www"):
-    os.mkdir("www")
-
-
-template = open("template.html", "r").read()
-db = sqlite3.connect("db.sqlite")
-cursor = db.cursor()
-cursor.execute("CREATE TABLE IF NOT EXISTS messages (event_id text PRIMARY KEY, room_id text, sender text, sender_display_name text, timestamp integer, body text)")
-cursor.execute("CREATE TABLE IF NOT EXISTS rooms (room_id text PRIMARY KEY, display_name text NULL)")
-cursor.execute("CREATE TABLE IF NOT EXISTS store (key text PRIMARY KEY, value text)")
-cursor.execute("CREATE TABLE IF NOT EXISTS members (room_id text, user_id text, displayname text, PRIMARY KEY (room_id, user_id))")
-cursor.execute("CREATE TABLE IF NOT EXISTS reactions (event_id text, key text, sender text)")
-db.commit()
-
-
-def render(timestamp, only_room_id=None):
-    my_user_id = cursor.execute("SELECT value FROM store WHERE key = 'my_user_id'").fetchone()[0]
-
-    cursor.execute("SELECT DISTINCT rooms.room_id, rooms.display_name, first_room_member_displayname, member_count FROM rooms LEFT JOIN (SELECT room_id, displayname AS first_room_member_displayname FROM members WHERE user_id != ? GROUP BY room_id) AS hehu ON rooms.room_id = hehu.room_id LEFT JOIN (SELECT room_id, COUNT(*) AS member_count FROM members GROUP BY room_id) AS hehu2 ON rooms.room_id = hehu2.room_id ORDER BY rooms.display_name ASC",
-                   (my_user_id,))
-    rooms = [{ 
-        "room_id": x[0], 
-        "filename": x[0].replace("!", "_").replace(":", "_").replace(".", "-"),
-        "display_name": x[1] or x[2] or x[0],
-        "member_count": x[3]
-    } for x in cursor.fetchall()]
-
-    for room in rooms:
-        if only_room_id and room["room_id"] != only_room_id:
-            continue
-
-        cursor.execute("SELECT sender, sender_display_name, timestamp, body, event_id FROM messages WHERE room_id = ? ORDER BY timestamp ASC", (room["room_id"],))
-        messages = [{
-            "sender": x[0], 
-            "sender_display_name": x[1], 
-            "timestamp": x[2],
-            "body": x[3],
-            "hhmm": time.strftime("%H:%M", time.localtime(x[2]/1000)),
-            "event_id": x[4],
-        } for x in cursor.fetchall()]
-
-        for message in messages:
-            cursor.execute("SELECT key, sender FROM reactions WHERE event_id = ?", (message["event_id"],))
-            reactions = cursor.fetchall()
-            message["reactions"] = [{
-                "key": x[0],
-                "sender": x[1],
-                "sender_display_name": x[1][1:].split(":")[0],
-            } for x in reactions]
-
-        data = {
-            "rooms": rooms,
-            "messages": messages,
-            "room_id": room["room_id"],
-            "room_display_name": room["display_name"],
-            "access_token": MATRIX_ACCESS_TOKEN,
-            "build_batch_ts": timestamp
-        }
-
-        html = chevron.render(template, data)
-        open(f"www/{room['filename']}.html", "w").write(html)
-
-
-def fetch_whoami():
-    url = f"https://matrix.znurre.com/_matrix/client/r0/account/whoami?access_token={MATRIX_ACCESS_TOKEN}"
+    url = f"{homeserver}_matrix/client/r0/account/whoami?access_token={access_token}"
     response = requests.get(url)
     data = json.loads(response.content)
     cursor.execute("INSERT OR REPLACE INTO store VALUES (?, ?)", ("my_user_id", data["user_id"]))
 
 
-def fetch_rooms(since=None):
-    url = f"https://matrix.znurre.com/_matrix/client/r0/sync?filter={{\"room\":{{\"timeline\":{{\"limit\":1}}}}}}&access_token={MATRIX_ACCESS_TOKEN}"
+def fetch_rooms(db, cursor, since=None):
+    cursor.execute("SELECT value FROM store WHERE key = 'access_token'")
+    access_token = cursor.fetchone()[0]
+    cursor.execute("SELECT value FROM store WHERE key = 'homeserver'")
+    homeserver = cursor.fetchone()[0]
+
+    url = f"{homeserver}_matrix/client/r0/sync?filter={{\"room\":{{\"timeline\":{{\"limit\":1}}}}}}&access_token={access_token}"
 
     if since:
         url += f"&since={since}"
@@ -129,8 +68,11 @@ def fetch_rooms(since=None):
     db.commit()
 
 
-def fetch_events(since=None):
-    url = f"https://matrix.znurre.com/_matrix/client/r0/sync?timeout=30000&access_token={MATRIX_ACCESS_TOKEN}"
+def fetch_events(db, cursor, since=None):
+    cursor.execute("SELECT value FROM store WHERE key = 'access_token'")
+    access_token = cursor.fetchone()[0]
+
+    url = f"https://matrix.znurre.com/_matrix/client/r0/sync?timeout=30000&access_token={access_token}"
 
     if since is not None:
         url += f"&since={since}"
@@ -164,8 +106,15 @@ def fetch_events(since=None):
                     cursor.execute("INSERT OR IGNORE INTO messages VALUES (?, ?, ?, ?, ?, ?)", (event["event_id"], room_id, sender, sender_display_name, timestamp, body))
                     db.commit()
                 elif event["type"] == "m.reaction":
+                    print(event)
                     sender = event["sender"] # @xinux:matrix.znurre.com
                     content = event["content"] # {"m.relates_to": {"event_id": "$event_id", "key": "👍", "rel_type": "m.annotation"}}
+                    
+                    if "m.relates_to" not in content:
+                        print("WTF?")
+                        print(event)
+                        continue
+                    
                     message_id = content["m.relates_to"]["event_id"]
                     key = content["m.relates_to"]["key"]
 
@@ -176,25 +125,37 @@ def fetch_events(since=None):
                     print(f"Unknown event type: {event['type']}")
             
             # render room
-            render(next_batch, room_id)
+            # render(next_batch, room_id)
 
     return next_batch
 
 
-fetch_whoami()
 
-since = (cursor.execute("SELECT value FROM store WHERE key = 'next_batch'").fetchone() or (None,))[0]
 
-fetch_rooms(since)
+for db_filename in os.listdir('./db'):
+    if not db_filename.endswith('.sqlite3'):
+        continue
 
-while True:
-    since = fetch_events(since)
-    # break
+    db_path = os.path.join('./db', db_filename)
+    db = sqlite3.connect(db_path)
+    cursor = db.cursor()
 
-db.close()
+    cursor.execute("CREATE TABLE IF NOT EXISTS messages (event_id text PRIMARY KEY, room_id text, sender text, sender_display_name text, timestamp integer, body text)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS rooms (room_id text PRIMARY KEY, display_name text NULL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS store (key text PRIMARY KEY, value text)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS members (room_id text, user_id text, displayname text, PRIMARY KEY (room_id, user_id))")
+    cursor.execute("CREATE TABLE IF NOT EXISTS reactions (event_id text, key text, sender text)")
+    db.commit()
 
-# #%%
-# from xmldiff import main as xmldiff
+    fetch_whoami(db, cursor)
 
-# diff = xmldiff.diff_files("www/a.html", "www/b.html")
-# diff
+    since = (cursor.execute("SELECT value FROM store WHERE key = 'next_batch'").fetchone() or (None,))[0]
+    # since = None
+
+    fetch_rooms(db, cursor, since)
+
+    while True:
+        since = fetch_events(db, cursor, since)
+        break
+
+    db.close()

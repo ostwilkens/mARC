@@ -1,0 +1,113 @@
+
+/* garamond */
+@font-face {
+    font-family: "Garamond";
+    src: url("/fonts/EBGaramond-VariableFont_wght.ttf") format("truetype supports variations"),
+         url("/fonts/EBGaramond-VariableFont_wght.ttf") format("truetype-variations");
+    font-weight: 100 1000;
+}
+
+
+html {
+    /* font-family: 'Garamond'; */
+    font-family: 'Iowan Old Style', 'Palatino Linotype', 'URW Palladio L', P052, serif;
+    font-size: 16px;
+    min-height: 100%;
+    /* display: flex; */
+}
+
+body {
+    margin: 0;
+    /* display: flex; */
+    overflow-x: hidden;
+}
+
+#rooms {
+    height: 100%;
+    display: none;
+}
+
+#room {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    /* border-left: 1px solid black; */
+    overflow-x: hidden;
+
+    width: 600px;
+    margin: auto;
+    padding-right: 80px;
+    padding-bottom: 75px;
+}
+
+#messages {
+    flex: 1;
+    justify-content: flex-end;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.message {
+    display: flex;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+}
+
+#input {
+    border: none;
+    /* border-top: 1px solid black; */
+    outline: none;
+    font-family: inherit;
+    font-size: inherit;
+    margin-left: 120px;
+    margin-top: 13px;
+    resize: none;
+}
+
+.message .timestamp {
+    font-size: 62%;
+    padding-top: 6px;
+    padding-left: 3px;
+    width: 30px;
+}
+
+.message .sender {
+    font-style: italic;
+    font-weight: bold;
+    display: inline-flex;
+    width: 88px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 2px;
+    box-sizing: border-box;
+}
+
+.message .body {
+    flex: 1;
+    position: relative;
+}
+
+.message .reactions {
+    font-size: 75%;
+    padding-left: 2px;
+    letter-spacing: -1px;
+    position: absolute;
+    margin-top: -2px;
+}
+
+.message .reaction {
+    /* margin-right: -2px; */
+}
+
+#top-fadeout {
+    position: fixed;
+    width: 100%;
+    height: 120px;
+    display: block;
+    background: linear-gradient(to top, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 1) 100%);
+}
+
+.emoticon {
+    font-family: monospace;
+}

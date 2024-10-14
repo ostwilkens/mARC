@@ -4,3 +4,9 @@ www/*
 store
 /samples
 *.sqlite
+!www/fonts
+!www/styles.css
+!www/login.html
+!www/favicon.svg
+db
+.DS_Store
