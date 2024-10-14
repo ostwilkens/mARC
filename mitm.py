@@ -72,7 +72,7 @@ def render(timestamp, only_room_id=None):
         }
 
         html = chevron.render(template, data)
-        open(f"www/{room['filename']}.html", "w").write(html)
+        open(f"www/{room['filename']}.html", "w", encoding='utf-8').write(html)
 
 
 def fetch_whoami():
